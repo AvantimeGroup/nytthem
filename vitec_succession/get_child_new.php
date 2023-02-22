@@ -1,0 +1,1529 @@
+<?php 
+
+define('WP_CACHE', false);
+
+ini_set('max_execution_time', 0);
+
+require_once('../wp-load.php');
+
+
+//amacinfo_api
+
+$links = mysqli_connect('nytthem-vitec-173404.mysql.binero.se', '173404_xh36686', 't3uytMHyDg');
+
+mysqli_select_db($links, '173404-vitec-2017') or die('Unable to select database, Please Check Your Connection..');
+
+$table_name = 'wp_vitec_succession_anvandare';
+
+$kontakt_table_name = 'wp_vitec_succession_anvandare_kontakt_details';
+
+$child_table_name = 'wp_vitec_succession_child_records';
+
+$get_all_guids = "SELECT guid,bilder,filer FROM  `".$table_name."`";
+$results = $wpdb->get_results($get_all_guids);
+$guids['guid'] = array();
+ foreach($results as $res){
+	  $guid = $res->guid;
+	  $bilder = unserialize($res->bilder);
+	  $filer = unserialize($res->filer);
+	  if(isset($bilder->Bild)){
+		if(is_array($bilder->Bild)){
+		  foreach($bilder->Bild as $_bild){
+			  
+			$data[$guid]['bilder'][] =  $_bild->Guid;
+			  
+		  }
+		  
+		}else{
+			$data[$guid]['bilder'][] =  $bilder->Bild->Guid;
+		}  
+		  
+	  }
+	  if(isset($filer->Fil)){
+		if(is_array($filer->Fil)){  
+		  foreach($filer->Fil as $_fil){
+			  
+			$data[$guid]['filer'][] =  $_fil->Guid;
+			  
+		  }
+		}else{
+			
+			$data[$guid]['filer'][] =  $filer->Fil->Guid;
+			
+		}  
+	  }
+	$get_all_guids_child = "SELECT guid,bilder,filer FROM  `".$child_table_name."` where parent_ID LIKE '$guid'";
+	$results_child = $wpdb->get_results($get_all_guids_child);
+
+	//$data[$guid]['childs'][] = 	$results_child;
+	foreach($results_child as $res_ch){
+		  $child_guid = $res_ch->guid;
+		  $child_bilder = unserialize($res_ch->bilder);
+		  $child_filer = unserialize($res_ch->filer);
+		    if(isset($child_bilder->Bild)){
+				if(is_array($child_bilder->Bild)){
+				  foreach($child_bilder->Bild as $c_bild){
+					  
+					$data[$guid][$child_guid]['child_bilder'][] =  $c_bild->Guid;
+					  
+				  }
+				  
+				}else{
+					$data[$guid][$child_guid]['child_bilder'][] =  $child_bilder->Bild->Guid;
+				}  
+				  
+			  }
+			  if(isset($child_filer->Fil)){
+				if(is_array($child_filer->Fil)){  
+				  foreach($child_filer->Fil as $c_fil){
+					  
+					$data[$guid][$child_guid]['child_filer'][] =  $c_fil->Guid;
+					  
+				  }
+				}else{
+					
+					$data[$guid][$child_guid]['child_filer'][] =  $child_filer->Fil->Guid;
+					
+				}  
+			  }
+	}
+	
+ }
+ 
+//echo "<pre>"; print_r($data);
+
+
+$dir = "../vitec_succession_guid/";
+$directories = dirToArray($dir,$data); 
+
+function dirToArray($dir,$data) {
+  
+   $result = array();
+
+   $cdir = scandir($dir);
+   
+   foreach ($cdir as $key => $value)
+   {
+      if (!in_array($value,array(".","..",'kontact')))
+      {
+		if(array_key_exists ( $value , $data )){
+			if (is_dir($dir . $value)){
+				
+				$dir_list = scandir($dir . $value);
+				
+				 foreach ($dir_list as $key => $list_value)
+				   {
+					  if (!in_array($list_value,array(".","..")))
+					  {	
+						
+						if (is_dir($dir . $value. DIRECTORY_SEPARATOR .$list_value)){
+					
+							die('here') ; 
+						}else{
+							
+						$himg =  str_replace(array('img_','.jpg'),'',$list_value); 
+						
+						/* if(!in_array($himg,$data[$value]['bilder']) || (isset($data[$value]['filer']) && !in_array($himg,$data[$value]['filer']))){
+							
+							unlink($dir . $value. DIRECTORY_SEPARATOR .$list_value);
+							echo 1;
+						}
+						$limg =  str_replace(array('img_','_lowres.jpg'),'',$list_value) ;
+
+						if(!in_array($limg,$data[$value]['bilder']) || (isset($data[$value]['filer']) && !in_array($limg,$data[$value]['filer']))){
+							
+							unlink($dir . $value. DIRECTORY_SEPARATOR .$list_value);
+							echo 2;
+							die;
+						} */
+							
+						}  
+					  }
+				   }  
+				
+			 }else{
+				echo $value ; die;
+				$result[] = $value;
+			 } 
+			
+		}else{
+			die('here');
+			rmdir_recursive($dir.$value);
+			
+		}
+		
+       /*   if (is_dir($dir . DIRECTORY_SEPARATOR . $value))
+         {
+            $result[$value] = dirToArray($dir . DIRECTORY_SEPARATOR . $value);
+         }
+         else
+         {
+            $result[] = $value;
+         } */
+      }
+   }
+  
+   return $result;
+} 
+
+
+function rmdir_recursive($dir) {
+    foreach(scandir($dir) as $file) {
+        if ('.' === $file || '..' === $file) continue;
+        if (is_dir("$dir/$file")) rmdir_recursive("$dir/$file");
+        else unlink("$dir/$file");
+    }
+    rmdir($dir);
+}
+//echo "List Directories";
+ //print_r($directories);
+//echo "<pre>"; print_r($directories);
+
+
+die;  
+
+require_once('lib/nusoap.php');
+
+$url = 'http://export.capitex.se/Nyprod/Standard/Export.svc?singleWsdl';
+
+$licensId = 13751;
+
+$Licensnyckel = 'e93de2eb-3cdb-7c8e-fe1c-d8046e28803d1';
+
+$customer_no = 13751;
+
+$client = new SoapClient($url);
+
+
+try{
+$result = $client->HamtaLista(array(
+
+    'licensId' => $licensId,
+
+    'licensNyckel' => $Licensnyckel,
+
+    'kundnummer' => $customer_no
+
+        ));
+}catch(Exception $e){
+	
+	SenderrorAlarm($e->getMessage());
+	echo '<pre>' ; print_r($e->getMessage());
+	
+}
+$count = 0;		
+
+//Virender
+
+function SenderrorAlarm($message){
+		
+$mail_content = '
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Simple Transactional Email</title>
+    <style>
+      /* -------------------------------------
+          GLOBAL RESETS
+      ------------------------------------- */
+      img {
+        border: none;
+        -ms-interpolation-mode: bicubic;
+        max-width: 100%; }
+
+      body {
+        background-color: #f6f6f6;
+        font-family: sans-serif;
+        -webkit-font-smoothing: antialiased;
+        font-size: 14px;
+        line-height: 1.4;
+        margin: 0;
+        padding: 0;
+        -ms-text-size-adjust: 100%;
+        -webkit-text-size-adjust: 100%; }
+
+      table {
+        border-collapse: separate;
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+        width: 100%; }
+        table td {
+          font-family: sans-serif;
+          font-size: 14px;
+          vertical-align: top; }
+
+      /* -------------------------------------
+          BODY & CONTAINER
+      ------------------------------------- */
+
+      .body {
+        background-color: #f6f6f6;
+        width: 100%; }
+
+      /* Set a max-width, and make it display as block so it will automatically stretch to that width, but will also shrink down on a phone or something */
+      .container {
+        display: block;
+        Margin: 0 auto !important;
+        /* makes it centered */
+        max-width: 580px;
+        padding: 10px;
+        width: 580px; }
+
+      /* This should also be a block element, so that it will fill 100% of the .container */
+      .content {
+        box-sizing: border-box;
+        display: block;
+        Margin: 0 auto;
+        max-width: 580px;
+        padding: 10px; }
+
+      /* -------------------------------------
+          HEADER, FOOTER, MAIN
+      ------------------------------------- */
+      .main {
+        background: #ffffff;
+        border-radius: 3px;
+        width: 100%; }
+
+      .wrapper {
+        box-sizing: border-box;
+        padding: 20px; }
+
+      .content-block {
+        padding-bottom: 10px;
+        padding-top: 10px;
+      }
+
+      .footer {
+        clear: both;
+        Margin-top: 10px;
+        text-align: center;
+        width: 100%; }
+        .footer td,
+        .footer p,
+        .footer span,
+        .footer a {
+          color: #999999;
+          font-size: 12px;
+          text-align: center; }
+
+      /* -------------------------------------
+          TYPOGRAPHY
+      ------------------------------------- */
+      h1,
+      h2,
+      h3,
+      h4 {
+        color: #000000;
+        font-family: sans-serif;
+        font-weight: 400;
+        line-height: 1.4;
+        margin: 0;
+        Margin-bottom: 30px; }
+
+      h1 {
+        font-size: 35px;
+        font-weight: 300;
+        text-align: center;
+        text-transform: capitalize; }
+
+      p,
+      ul,
+      ol {
+        font-family: sans-serif;
+        font-size: 14px;
+        font-weight: normal;
+        margin: 0;
+        Margin-bottom: 15px; }
+        p li,
+        ul li,
+        ol li {
+          list-style-position: inside;
+          margin-left: 5px; }
+
+      a {
+        color: #3498db;
+        text-decoration: underline; }
+
+      /* -------------------------------------
+          BUTTONS
+      ------------------------------------- */
+      .btn {
+        box-sizing: border-box;
+        width: 100%; }
+        .btn > tbody > tr > td {
+          padding-bottom: 15px; }
+        .btn table {
+          width: auto; }
+        .btn table td {
+          background-color: #ffffff;
+          border-radius: 5px;
+          text-align: center; }
+        .btn a {
+          background-color: #ffffff;
+          border: solid 1px #3498db;
+          border-radius: 5px;
+          box-sizing: border-box;
+          color: #3498db;
+          cursor: pointer;
+          display: inline-block;
+          font-size: 14px;
+          font-weight: bold;
+          margin: 0;
+          padding: 12px 25px;
+          text-decoration: none;
+          text-transform: capitalize; }
+
+      .btn-primary table td {
+        background-color: #3498db; }
+
+      .btn-primary a {
+        background-color: #3498db;
+        border-color: #3498db;
+        color: #ffffff; }
+
+      /* -------------------------------------
+          OTHER STYLES THAT MIGHT BE USEFUL
+      ------------------------------------- */
+      .last {
+        margin-bottom: 0; }
+
+      .first {
+        margin-top: 0; }
+
+      .align-center {
+        text-align: center; }
+
+      .align-right {
+        text-align: right; }
+
+      .align-left {
+        text-align: left; }
+
+      .clear {
+        clear: both; }
+
+      .mt0 {
+        margin-top: 0; }
+
+      .mb0 {
+        margin-bottom: 0; }
+
+      .preheader {
+        color: transparent;
+        display: none;
+        height: 0;
+        max-height: 0;
+        max-width: 0;
+        opacity: 0;
+        overflow: hidden;
+        mso-hide: all;
+        visibility: hidden;
+        width: 0; }
+
+      .powered-by a {
+        text-decoration: none; }
+
+      hr {
+        border: 0;
+        border-bottom: 1px solid #f6f6f6;
+        Margin: 20px 0; }
+
+      /* -------------------------------------
+          RESPONSIVE AND MOBILE FRIENDLY STYLES
+      ------------------------------------- */
+      @media only screen and (max-width: 620px) {
+        table[class=body] h1 {
+          font-size: 28px !important;
+          margin-bottom: 10px !important; }
+        table[class=body] p,
+        table[class=body] ul,
+        table[class=body] ol,
+        table[class=body] td,
+        table[class=body] span,
+        table[class=body] a {
+          font-size: 16px !important; }
+        table[class=body] .wrapper,
+        table[class=body] .article {
+          padding: 10px !important; }
+        table[class=body] .content {
+          padding: 0 !important; }
+        table[class=body] .container {
+          padding: 0 !important;
+          width: 100% !important; }
+        table[class=body] .main {
+          border-left-width: 0 !important;
+          border-radius: 0 !important;
+          border-right-width: 0 !important; }
+        table[class=body] .btn table {
+          width: 100% !important; }
+        table[class=body] .btn a {
+          width: 100% !important; }
+        table[class=body] .img-responsive {
+          height: auto !important;
+          max-width: 100% !important;
+          width: auto !important; }}
+
+      /* -------------------------------------
+          PRESERVE THESE STYLES IN THE HEAD
+      ------------------------------------- */
+      @media all {
+        .ExternalClass {
+          width: 100%; }
+        .ExternalClass,
+        .ExternalClass p,
+        .ExternalClass span,
+        .ExternalClass font,
+        .ExternalClass td,
+        .ExternalClass div {
+          line-height: 100%; }
+        .apple-link a {
+          color: inherit !important;
+          font-family: inherit !important;
+          font-size: inherit !important;
+          font-weight: inherit !important;
+          line-height: inherit !important;
+          text-decoration: none !important; }
+        .btn-primary table td:hover {
+          background-color: #34495e !important; }
+        .btn-primary a:hover {
+          background-color: #34495e !important;
+          border-color: #34495e !important; } }
+
+    </style>
+  </head>
+  <body class="">
+    <table border="0" cellpadding="0" cellspacing="0" class="body">
+      <tr>
+        <td>&nbsp;</td>
+        <td class="container">
+          <div class="content">
+
+            <!-- START CENTERED WHITE CONTAINER -->
+            <table class="main">
+				<!-- START MAIN CONTENT AREA -->
+              <tr>
+                <td class="wrapper">
+                  <table border="0" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td>
+                        <p>'.$message.'</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+           
+            </table>
+		
+          </div>
+        </td>
+        <td>&nbsp;</td>
+      </tr>
+    </table>
+  </body>
+</html>';
+$headers = "MIME-Version: 1.0" . "\r\n";
+$headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
+
+// More headers
+$headers .= 'From: <no-reply@nytthem.se>' . "\r\n";
+//mail('Chisburg@gmail.com','Error Alarm',$mail_content,$headers);
+	
+}
+//Virender
+
+function load_images($main_guid,$bild_obj,$folder){
+
+
+
+	if((isset($bild_obj->Guid)) and isset($main_guid))
+
+	{
+
+		$dirpath = "../vitec_succession_guid/".$main_guid;
+
+		$subdirpath = "../vitec_succession_guid/".$main_guid."/".$folder;
+
+		if (!is_dir($dirpath)) {
+
+			mkdir($dirpath, 0777);
+
+		}
+
+		if($folder <>"")
+
+		{
+
+			if (!is_dir($subdirpath)) {
+
+				mkdir($subdirpath, 0777);
+
+			}
+
+			$dirpath = $subdirpath; 
+
+		}
+		//echo "<br><br>";
+		//echo 'http://fastighet.capitex.se/CapitexResources/Capitex.Datalager.DBFile/Capitex.Datalager.DBFile.dbfile.aspx?g='.$bild_obj->Guid.'&t=CBild', $dirpath.'/img_'.$bild_obj->Guid.'.jpg';
+		
+		 if(!file_exists($dirpath.'/img_'.$bild_obj->Guid.'.jpg'))
+		{
+
+			copy('http://fastighet.capitex.se/CapitexResources/Capitex.Datalager.DBFile/Capitex.Datalager.DBFile.dbfile.aspx?g='.$bild_obj->Guid.'&t=CBild', $dirpath.'/img_'.$bild_obj->Guid.'.jpg');
+			
+			$source_path = $dirpath.'/img_'.$bild_obj->Guid.'.jpg';
+			$destination_path = $dirpath.'/img_'.$bild_obj->Guid.'_lowres.jpg';
+			$compp = compress_image($source_path, $destination_path, 90);
+
+		} 
+
+	}
+
+}
+// to compress images
+function compress_image($source_url, $destination_url, $quality) {
+	$info = getimagesize($source_url);
+ 
+	if ($info['mime'] == 'image/jpeg') $image = imagecreatefromjpeg($source_url);
+	elseif ($info['mime'] == 'image/gif') $image = imagecreatefromgif($source_url);
+	elseif ($info['mime'] == 'image/png') $image = imagecreatefrompng($source_url);
+ 
+	//save it
+	imagejpeg($image, $destination_url, $quality);
+ 
+	//return destination file url
+	return $destination_url;
+}
+
+function load_kontact_images($main_guid,$bild_obj,$folder){
+
+
+
+	if((isset($bild_obj->Guid)) and isset($main_guid))
+	{
+		$dirpath = "../vitec_succession_guid/".$folder;
+
+		//echo "<br><br>";
+		//echo 'http://fastighet.capitex.se/CapitexResources/Capitex.Datalager.DBFile/Capitex.Datalager.DBFile.dbfile.aspx?g='.$bild_obj->Guid.'&t=CBild', $dirpath.'/img_'.$bild_obj->Guid.'.jpg';
+		if(!file_exists($dirpath.'/'.$bild_obj->Guid.'.jpg'))
+		{
+
+			copy('http://fastighet.capitex.se/CapitexResources/Capitex.Datalager.DBFile/Capitex.Datalager.DBFile.dbfile.aspx?g='.$bild_obj->Guid.'&t=CBild', $dirpath.'/'.$bild_obj->Guid.'.jpg');
+			$source_path = $dirpath.'/'.$bild_obj->Guid.'.jpg';
+			$destination_path = $dirpath.'/'.$bild_obj->Guid.'_lowres.jpg';
+			$compp = compress_image($source_path, $destination_path, 90);
+
+		}
+
+	}
+
+}
+
+
+function load_files($url,$main_guid,$child_guid,$filerGuid,$folder){
+
+	if((isset($child_guid)) and isset($main_guid))
+
+	{
+
+		$dirpath = "../vitec_succession_guid/".$main_guid."/".$child_guid;
+
+		$subdirpath = "../vitec_succession_guid/".$main_guid."/".$child_guid."/".$folder;
+
+		if (!is_dir($dirpath)) {
+
+			mkdir($dirpath, 0777);
+
+		}
+
+		if($folder <>"")
+
+		{
+
+			if (!is_dir($subdirpath)) {
+
+				mkdir($subdirpath, 0777);
+
+			}
+
+			$dirpath = $subdirpath; 
+
+		}
+		
+		if(!file_exists($dirpath.'/pdf_'.$filerGuid.'.pdf'))
+
+		{
+
+			@copy( $url , $dirpath.'/pdf_'.$filerGuid.'.pdf');
+			
+		}
+
+	}
+
+} 
+
+function load_images_child_bilder($url,$main_guid,$child_guid,$Guid,$folder){
+
+	if((isset($child_guid)) and isset($main_guid))
+
+	{
+		//echo $dirpath = "../vitec_succession_guid/".$main_guid."/".$child_guid;
+		$dirpath = "../vitec_succession_guid/".$main_guid."/".$child_guid;
+
+		$subdirpath = "../vitec_succession_guid/".$main_guid."/".$child_guid."/".$folder;
+
+		if (!is_dir($dirpath)) {
+
+			mkdir($dirpath, 0777);
+
+		}
+
+		if($folder <>"")
+
+		{
+
+			if (!is_dir($subdirpath)) {
+
+				mkdir($subdirpath, 0777);
+
+			}
+
+			$dirpath = $subdirpath; 
+
+		}
+		 if(!file_exists($dirpath.'/img_'.$Guid.'.jpg'))
+
+		{
+
+		@copy( $url , $dirpath.'/img_'.$Guid.'.jpg');
+			
+		$source_path = $dirpath.'/img_'.$Guid.'.jpg';
+		$destination_path = $dirpath.'/img_'.$Guid.'_lowres.jpg';
+		$compp = compress_image($source_path, $destination_path, 90);
+			
+		}
+
+	}
+
+}
+
+
+function process_child($p_guid, $c_guid)
+
+{
+
+	global $client,$licensId,$Licensnyckel,$child_table_name,$links;
+		
+		try{
+		$Bostadsrattslista = $client->HamtaBostadsratt(array(
+
+			'licensid' => $licensId,
+
+			'licensnyckel' => $Licensnyckel,
+
+			'guid' => $c_guid
+
+		));	
+		}catch(Exception $e){
+	
+			SenderrorAlarm($e->getMessage());
+			echo $c_guid ; echo '<br>';
+			echo '<pre>' ; print_r($e->getMessage());
+			
+		}
+
+
+		if($Bostadsrattslista->HamtaBostadsrattResult)
+
+		{
+
+			$BostadRestult = $Bostadsrattslista->HamtaBostadsrattResult;
+
+			//Check if child GUID exists, If exists check if update date is other than existing
+
+			$check_child_guid = "SELECT child_ID,parent_ID,guid,SenastAndrad,bilder FROM `".$child_table_name."` where `Guid`='".$c_guid."'";
+
+			$child_guid_result = mysqli_query($links,$check_child_guid);
+
+			$child_qu=false;
+
+			$child_pre="";
+
+			$bilder_object_dbb = "";
+
+			if ($child_guid_result->num_rows > 0)	// if exists
+
+			{
+
+				while($row = $child_guid_result->fetch_assoc())
+
+				{
+
+					$child_record_id = $row["child_ID"];
+
+					$child_upd_date = $row["SenastAndrad"];
+					
+					$bilder_object_dbb = unserialize($row["bilder"]);
+
+				}
+
+
+
+				if($child_upd_date <> $BostadRestult->SenastAndrad)
+
+				{
+
+					$child_qu=true;
+
+					$child_query_part1="UPDATE `".$child_table_name."` SET ";
+
+					$child_query_part3="WHERE `child_ID`='".$child_record_id."'";
+
+				}
+
+			}
+
+			else
+
+			{
+
+				$child_qu=true;
+
+				$child_query_part1="INSERT INTO `".$child_table_name."` SET `parent_ID`='".$p_guid."'";
+
+				$child_query_part3="";
+
+				$child_pre=",";
+
+			}
+			
+			/* echo '<pre>';
+			print_r($BostadRestult);
+			echo '</pre>'; */
+			
+			/* echo '<pre>';
+			print_r($bilder_object_dbb);
+			echo '</pre>'; */
+
+   			foreach($BostadRestult as $bostad_key=>$bostad_val)
+			{
+
+				if($bostad_key=='Adress'  || $bostad_key=='Vagbeskrivning' || $bostad_key=='Projektnamn'
+					 || $bostad_key=='RumsbeskrivningFritext'  || $bostad_key=='Beskrivning'  || $bostad_key=='Visningar'
+					  || $bostad_key=='SaljandeBeskrivningar' || $bostad_key == "Filer"
+					  || $bostad_key=='Lagenhetsnummer' 
+					  || $bostad_key=='Rum' || $bostad_key=='Hiss'
+					  || $bostad_key=='Vaningsplan'
+					  || $bostad_key=='Manadsavgift'
+					  || $bostad_key=='Status'
+					  || $bostad_key=='Guid'
+					  || $bostad_key=='Byggnadstyp'
+					  || $bostad_key=='Objekttyp'
+					  || $bostad_key=='Filer'
+					  || $bostad_key=='BalkongOchUteplats'
+					  || $bostad_key=='PrisAnbudTillval'
+					  || $bostad_key=='Bilder' || $bostad_key=='Utgangspris' || $bostad_key=='Uteplats' || $bostad_key=='UpplatelseformUpplatelseform' 
+					  || $bostad_key=='Upplatelse'
+					  || $bostad_key=='Tvanslutning'
+					  )
+				
+				{
+
+					if(is_object($bostad_val))
+
+					{
+
+						$child_col_val = serialize($bostad_val);
+
+					}
+
+					else
+
+					{
+
+						$child_col_val = $bostad_val;
+
+					}
+					$child_query_part2.=$child_pre." `".$bostad_key."`='".$child_col_val."'";
+
+					$child_pre=",";
+
+				}
+				
+				
+					if($bostad_key=="Filer")
+					{
+						
+						$bostad_val1 = maybe_unserialize($bostad_val->Fil);
+						
+					 	if(is_array($bostad_val1))
+						{
+							
+							foreach($bostad_val1 as $filer)	
+							{
+								$url = 'http://fastighet.capitex.se/'.$filer->Url;		
+								load_files($url,$p_guid,$c_guid,$filer->Guid,"filer");
+							}
+						}
+						else {
+								$url = 'http://fastighet.capitex.se/'.$bostad_val1->Url;		
+								load_files($url,$p_guid,$c_guid,$filer->Guid,"filer");
+						}	 					
+
+					}
+					
+					if($bostad_key=="Bilder")
+
+						{
+
+							foreach($bostad_val as $bild=>$bilds)
+
+							{
+								
+								if(is_array($bilds))
+
+								{
+
+									foreach($bilds as $k=>$bild_last)
+
+									{
+												
+										if(is_array($bilder_object_dbb->Bild))
+
+										{
+										//	echo 'processing2';
+											$bild_image_name_dbb = $bilder_object_dbb->Bild[$k]->SenastAndrad;
+											
+										}
+
+										else
+
+										{
+										//	echo 'processing1';
+											$bild_image_name_dbb = $bilder_object_dbb->Bild->SenastAndrad;
+
+										}
+										$child_dir_path = "../vitec_succession_guid/".$p_guid."/".$c_guid."/bilder";
+		
+										
+										if($bild_image_name_dbb <> $bild_last->SenastAndrad || !file_exists($child_dir_path.'/img_'.$bild_last->Guid.'.jpg'))
+
+										{ 
+										//	echo 'processing';
+											$url = 'http://fastighet.capitex.se/'.$bild_last->Url;		
+											load_images_child_bilder($url,$p_guid,$c_guid,$bild_last->Guid,"bilder");
+										}									
+										
+									}
+								}
+
+								else
+
+								{
+										$child_dir_path = "../vitec_succession_guid/".$p_guid."/".$c_guid."/bilder";
+										 if($bilder_object_db->Bild->SenastAndrad <> $bilds->SenastAndrad || !file_exists($child_dir_path.'/img_'.$bilds->Guid.'.jpg'))
+
+										{	//echo 'processing3';
+											$url = 'http://fastighet.capitex.se/'.$bilds->Url;		
+											load_images_child_bilder($url,$p_guid,$c_guid,$bilds->Guid,"bilder");
+
+										} 
+
+								}
+
+							}
+
+						} 
+
+			} 
+
+			if($child_qu)
+
+			{
+
+				// echo "<hr>";
+
+				$final_child_query = $child_query_part1.$child_query_part2.$child_query_part3;
+
+				mysqli_query($links, $final_child_query);
+
+			}
+
+			// else
+
+			// {
+
+				// echo "no query";
+
+			// }
+
+		}
+
+	
+
+}
+
+
+$dbmain = "";
+$dbbosted = "";
+
+
+foreach ($result->HamtaListaResult->ObjektUppdateringsinfo as $key => $value) {
+    
+
+	// if($value->Typ == 'CMNyprod')
+	if($value->Typ == 'CMNyProd' || $value->Typ == 'CMNyprod')
+
+	{
+		
+		$guid_array[] = $value->Guid;
+
+		try{
+		$result = $client->HamtaProjekt(array(
+
+			'licensid' => $value->KundNr,
+
+			'licensnyckel' => $Licensnyckel,
+
+			'guid' => $value->Guid 
+
+		));
+		
+		}catch(Exception $e){
+	
+			SenderrorAlarm($e->getMessage());
+			echo $value->Guid ; echo '<br>';
+			echo '<pre>' ; print_r($e->getMessage());
+			
+		}
+		$dbmain.="'".$value->Guid."',";
+			
+		$HamtaProjektResult = $result->HamtaProjektResult;
+		
+		$BostadChildObject = $HamtaProjektResult->Bostadsrattslista;
+
+		$BostadChild = $BostadChildObject->BostadsrattsLista;
+
+		
+
+
+
+		
+
+		//Check if GUID exists, If exists check if update date is other than existing
+
+		$check_guid = "SELECT anvandare_id,guid,senastandrad,bilder FROM  `".$table_name."` where `guid`='".$value->Guid."'";
+
+
+		$qu=false;
+
+		$bilder_object_db="";
+
+		$guid_result = mysqli_query($links,$check_guid);
+
+		if ($guid_result->num_rows > 0)
+
+		{
+
+			while($row = $guid_result->fetch_assoc())
+
+			{
+
+				$anv_id = $row["anvandare_id"];
+
+				$upd_date = $row["senastandrad"];
+
+				$bilder_object_db = unserialize($row["bilder"]);
+
+			}
+
+			if($upd_date <> $HamtaProjektResult->SenastAndrad)
+
+			{
+
+				$qu=true;
+
+				$query_part1="UPDATE `".$table_name."` SET ";
+
+				$query_part3="WHERE `anvandare_id`='".$anv_id."'";
+
+			}
+
+		}
+
+		else
+
+		{
+
+			$qu=true;
+
+			$query_part1="INSERT INTO `".$table_name."` SET ";
+
+			$query_part3="";
+
+		}
+
+		
+	
+		
+
+		$pre="";
+
+		$query_part2="";
+	//echo "<pre>"; print_r($HamtaProjektResult);
+		foreach($HamtaProjektResult as $key=>$val)
+
+		{
+
+			/// save images of project
+
+			if($key=="Bilder")
+
+			{
+
+				foreach($val as $bild=>$bilds)
+
+				{
+
+					if(is_array($bilds))
+
+					{
+
+						foreach($bilds as $k=>$bild_last)
+
+						{
+						
+							if(is_array($bilder_object_db->Bild))
+
+							{
+
+								$bild_image_name_db = $bilder_object_db->Bild[$k]->SenastAndrad;
+
+							}
+
+							else
+
+							{
+
+								$bild_image_name_db = $bilder_object_db->Bild->SenastAndrad;
+
+							}
+
+							 $dir_path = "../vitec_succession_guid/".$HamtaProjektResult->GUID;
+							 
+						if($bild_image_name_db <> $bild_last->SenastAndrad || !file_exists($dir_path.'/img_'.$bild_last->Guid.'.jpg'))
+
+							{ 
+								try{
+									
+								load_images($HamtaProjektResult->GUID,$bild_last,"");
+								
+								}catch(Exception $e){
+									
+									SenderrorAlarm($e->getMessage());
+									echo $HamtaProjektResult->GUID ; echo '<br>';
+									echo '<pre>' ; print_r($e->getMessage());
+									
+								}
+
+							}
+
+						}
+
+
+
+					}
+
+					else
+
+					{
+						$dir_path = "../vitec_succession_guid/".$HamtaProjektResult->GUID;
+					 	if($bilder_object_db->Bild->SenastAndrad <> $bilds->SenastAndrad || !file_exists($dir_path.'/img_'.$bilds->Guid.'.jpg'))
+
+						{
+							try{
+							load_images($HamtaProjektResult->GUID,$bilds,"");
+							}catch(Exception $e){
+								SenderrorAlarm($e->getMessage());
+								echo $HamtaProjektResult->GUID; echo '<br>';
+								echo '<pre>' ; print_r($e->getMessage());
+							}
+						} 
+
+					}
+
+				}
+
+			}
+
+			
+			/// save image for kontakt details
+
+			if($key=="Huvudhandlaggare")
+
+			{
+
+				$hu_obj = $val->Huvudhandlaggare;
+
+				$hu_guid = $hu_obj->GUID;
+
+				// if($hu_guid != "")
+
+				if($hu_guid != "" and $hu_guid != "4693O4BD7J602ME5" )
+
+				{
+					try{
+						
+					$result_again = $client->HamtaAnvandare(array(
+
+						'licensid' => $customer_no,
+
+						'licensnyckel' => $Licensnyckel,
+
+						'guid' => $hu_guid
+
+					));	
+					
+					}catch(Exception $e){
+	
+						SenderrorAlarm($e->getMessage());
+						echo $hu_guid ; echo '<br>';
+						echo '<pre>' ; print_r($e->getMessage());
+						
+					}
+
+					//echo '<pre>' ; print_r($result_again) ; 
+					$kontact_details = null;
+
+					if(isset($result_again->HamtaAnvandareResult))
+
+						$kontact_details = $result_again->HamtaAnvandareResult;
+
+					
+
+					$rtrn = "";
+
+					$kontakt_info = "";
+
+					if($kontact_details)
+
+					{
+						$kon_bilder_obj = $kontact_details->Bilder;
+
+
+
+						 foreach($kon_bilder_obj as $kon_bild_key=>$kon_bilds_val)
+
+						{
+
+								try{	
+								
+								load_kontact_images($HamtaProjektResult->GUID,$kon_bilds_val,"kontact");
+								
+								}catch(Exception $e){
+	
+									SenderrorAlarm($e->getMessage());
+									echo $HamtaProjektResult->GUID;  echo '<br>';
+									echo '<pre>' ; print_r($e->getMessage());
+								}
+							
+						} 
+
+						
+
+						$rtrn['kon_bild'] = $kon_bilds_val->Guid;
+
+						$rtrn['kon_befattning'] = $kontact_details->Befattning;
+
+						$rtrn['kon_namn'] = $kontact_details->Namn;
+
+						
+
+						$kon_epost_obj = $kontact_details->Epost;
+
+						$rtrn['kon_epost'] = $kon_epost_obj->Epostadress;
+
+						
+
+						$kon_telefon_mbl = $kontact_details->TelefonMobil;
+
+						$kon_telefon_drkt = $kontact_details->TelefonDirekt;
+
+						
+
+						$rtrn['kon_telefon'] = $kon_telefon_mbl?$kon_telefon_mbl:$kon_telefon_drkt;
+
+						$kontakt_info = serialize($rtrn);
+
+						
+						$check_kontact_guid = "SELECT guid,senastandrad FROM  `".$kontakt_table_name."` where `guid`='".$hu_guid."'";
+					
+						$kontact_result = mysqli_query($links,$check_kontact_guid);
+						
+						if ($kontact_result->num_rows > 0)
+						{
+							while($row = $kontact_result->fetch_assoc())
+							{
+							  $kontact_date = $row["senastandrad"];
+
+							}
+							if($kontact_date <>  $kontact_details->SenastAndrad)
+
+							{
+								$kontakt_query = "UPDATE `".$kontakt_table_name."` SET `kontaktdetails`='".$kontakt_info."' where `guid`='".$hu_guid."'";
+								mysqli_query($links, $kontakt_query);
+							}
+						}else{
+							
+								$kontakt_query = "INSERT INTO `".$kontakt_table_name."` SET `kontaktdetails`='".$kontakt_info."',`guid`='".$hu_guid."',`senastandrad`='".$kontact_details->SenastAndrad."',`type`='".$key."'";
+								mysqli_query($links, $kontakt_query);
+							
+						} 
+
+						$query_part2.=$pre." `kontaktdetails`='".$kontakt_info."'";
+
+						$pre=",";
+
+					}
+
+				}
+
+			}
+			if($key=="Handlaggare2")
+
+			{
+
+				$hu_obj = $val->Handlaggare2;
+
+				$hu_guid = $hu_obj->GUID;
+
+				// if($hu_guid != "")
+
+				if($hu_guid != "" and $hu_guid != "4693O4BD7J602ME5" )
+
+				{
+					try{
+						
+					$result_again = $client->HamtaAnvandare(array(
+
+						'licensid' => $customer_no,
+
+						'licensnyckel' => $Licensnyckel,
+
+						'guid' => $hu_guid
+
+					));	
+					
+					}catch(Exception $e){
+	
+						SenderrorAlarm($e->getMessage());
+						echo $hu_guid ; echo '<br>';
+						echo '<pre>' ; print_r($e->getMessage());
+						
+					}
+						 
+					//echo "<pre>"; print_r($result_again); 
+
+
+					$kontact_details = null;
+
+					if(isset($result_again->HamtaAnvandareResult))
+
+						$kontact_details = $result_again->HamtaAnvandareResult;
+
+					$rtrn2 = "";
+
+					$kontakt_info = "";
+
+					if($kontact_details)
+
+					{
+
+						$kon_bilder_obj = $kontact_details->Bilder;
+
+
+
+						 foreach($kon_bilder_obj as $kon_bild_key=>$kon_bilds_val)
+
+						{
+
+								try{	
+								
+								load_kontact_images($HamtaProjektResult->GUID,$kon_bilds_val,"kontact");
+								
+								}catch(Exception $e){
+	
+									SenderrorAlarm($e->getMessage());
+									echo $HamtaProjektResult->GUID ; echo '<br>';
+									echo '<pre>' ; print_r($e->getMessage());
+								}
+							
+
+						} 
+
+						
+
+						$rtrn2['kon_bild'] = $kon_bilds_val->Guid;
+
+						$rtrn2['kon_befattning'] = $kontact_details->Befattning;
+
+						$rtrn2['kon_namn'] = $kontact_details->Namn;
+
+						
+
+						$kon_epost_obj = $kontact_details->Epost;
+
+						$rtrn2['kon_epost'] = $kon_epost_obj->Epostadress;
+
+						
+
+						$kon_telefon_mbl = $kontact_details->TelefonMobil;
+
+						$kon_telefon_drkt = $kontact_details->TelefonDirekt;
+
+						
+
+						$rtrn2['kon_telefon'] = $kon_telefon_mbl?$kon_telefon_mbl:$kon_telefon_drkt;
+
+						$kontakt_info = serialize($rtrn2);
+
+						$check_kontact_guid = "SELECT guid,senastandrad FROM  `".$kontakt_table_name."` where `guid`='".$hu_guid."'";
+					
+						$kontact_result = mysqli_query($links,$check_kontact_guid);
+						
+						if ($kontact_result->num_rows > 0)
+						{
+							while($row = $kontact_result->fetch_assoc())
+							{
+							  $kontact_date = $row["senastandrad"];
+
+							}
+							if($kontact_date <>  $kontact_details->SenastAndrad)
+
+							{
+								$kontakt_query = "UPDATE `".$kontakt_table_name."` SET `kontaktdetails`='".$kontakt_info."' where `guid`='".$hu_guid."'";
+								mysqli_query($links, $kontakt_query);
+							}
+						}else{
+							
+								$kontakt_query = "INSERT INTO `".$kontakt_table_name."` SET `kontaktdetails`='".$kontakt_info."',`guid`='".$hu_guid."',`senastandrad`='".$kontact_details->SenastAndrad."',`type`='".$key."'";
+								mysqli_query($links, $kontakt_query);
+							
+						}
+
+						$query_part2.=$pre." `kontaktdetails2`='".$kontakt_info."'";
+
+						$pre=",";
+
+					}
+
+				}
+
+			}
+			if(is_object($val))
+
+			{
+
+				$col_val = serialize($val);
+
+			}
+
+			else
+
+			{
+
+				$col_val = $val;
+
+			}
+
+			$query_part2.=$pre." `".$key."`='".$col_val."'";
+
+			$pre=",";
+
+		} 
+		
+			if(is_array($BostadChild) and count($BostadChild > 0))
+
+			{
+
+				foreach($BostadChild as $BostadGuid)
+				{
+
+					$dbbosted.="'".$BostadGuid->GUID."',";
+					echo "<br><br>";
+					echo "Bostad Child GUID = ".$BostadGuid->GUID."<br>";
+					try{
+						
+					process_child($value->Guid,$BostadGuid->GUID);
+					
+					}catch(Exception $e){
+	
+									SenderrorAlarm($e->getMessage());
+									echo $value->Guid ; echo '<br>';
+									echo '<pre>' ; print_r($e->getMessage());
+					}
+
+				}
+
+			}
+
+			else {
+				
+				if(!empty($BostadChildObject->BostadsrattsLista->GUID))
+				{	
+					$dbbosted.="'".$BostadChildObject->BostadsrattsLista->GUID."',";
+					echo "<br><br>";
+					
+					echo "Bostad Child GUID = ".$BostadChildObject->BostadsrattsLista->GUID."<br>";
+					
+					try{
+					
+					process_child($value->Guid,$BostadChildObject->BostadsrattsLista->GUID);
+					
+					}catch(Exception $e){
+	
+									SenderrorAlarm($e->getMessage());
+									echo $value->Guid ;  echo '<br>' ; 
+									echo '<pre>' ; print_r($e->getMessage());
+								
+					}
+				}
+			}	
+
+		if($qu)
+
+		{
+
+			$final_query = $query_part1.$query_part2.$query_part3;
+				print_r($final_query);
+				echo '<br/><br/>------------------------------------------';
+			mysqli_query($links, $final_query);
+
+		}
+
+	}
+
+}
+
+if(!empty($dbbosted))
+{
+	//var_dump($dbbosted);
+	
+	//echo "delete FROM  `".$child_table_name."` where `Guid` not in (".$dbbosted.")";
+	$dbbosted=rtrim($dbbosted,',');
+	echo $rows_all = "delete FROM  `".$child_table_name."` where `Guid` not in (".$dbbosted.")";
+	mysqli_query($links,$rows_all);
+} 
+
+if(!empty($dbmain))
+{
+ $dbmain=rtrim($dbmain,',');
+ //var_dump($dbmain);
+ //echo "delete FROM  `".$table_name."` where `guid` not in (".$dbmain.")";
+ echo $rows_all = "delete FROM  `".$table_name."` where `guid` not in (".$dbmain.")"; 
+ mysqli_query($links,$rows_all);
+}
+
